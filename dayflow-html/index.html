@@ -35,12 +35,7 @@
           <button type="button" class="search-clear" id="searchClearBtn" aria-label="Clear search">&times;</button>
         </div>
 
-        <button type="button" class="btn btn-ghost" id="openSummaryBtn" title="View Daily Summary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="20" x2="18" y2="10"></line>
-            <line x1="12" y1="20" x2="12" y2="4"></line>
-            <line x1="6" y1="20" x2="6" y2="14"></line>
-          </svg>
+        <button type="button" class="btn btn-ghost" id="openSummaryBtn" title="View Daily Summary" style="display:none;">
           <span class="btn-label-hide">Summary</span>
         </button>
 
@@ -74,24 +69,58 @@
 
   <!-- MAIN CONTENT -->
   <main class="container">
-    <!-- CELEBRATION BANNER -->
-    <section class="celebration-banner" id="celebrationBanner" role="status" aria-live="polite">
-      <div class="celebration-content">
-        <div class="celebration-badge">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-        </div>
-        <div>
-          <strong>All today's tasks complete!</strong>
-          <div style="font-size: 0.84rem; color: var(--text-secondary);">You hit 100% completion for the day. Take a breather or review your daily summary.</div>
-        </div>
-      </div>
-      <button type="button" class="btn btn-ghost" id="bannerSummaryBtn">View Summary</button>
-    </section>
+    <!-- SECTION NAVIGATION TABS -->
+    <nav class="section-nav" id="sectionNav" aria-label="App sections">
+      <button type="button" class="nav-tab active" data-section-btn="dashboard">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="9" rx="2"></rect>
+          <rect x="14" y="3" width="7" height="5" rx="2"></rect>
+          <rect x="14" y="12" width="7" height="9" rx="2"></rect>
+          <rect x="3" y="16" width="7" height="5" rx="2"></rect>
+        </svg>
+        <span>Dashboard</span>
+      </button>
 
-    <!-- DASHBOARD HERO -->
-    <section class="hero-grid">
+      <button type="button" class="nav-tab" data-section-btn="tasks">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 11l3 3L22 4"></path>
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+        </svg>
+        <span>My Tasks</span>
+        <span class="nav-badge" id="navPendingBadge">0</span>
+      </button>
+
+      <button type="button" class="nav-tab" data-section-btn="summary">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"></line>
+          <line x1="12" y1="20" x2="12" y2="4"></line>
+          <line x1="6" y1="20" x2="6" y2="14"></line>
+        </svg>
+        <span>Summary</span>
+      </button>
+    </nav>
+
+    <!-- =====================================
+         SECTION 1: DASHBOARD OVERVIEW
+         ===================================== -->
+    <div class="app-section active" id="section-dashboard" data-section="dashboard">
+      <!-- CELEBRATION BANNER -->
+      <section class="celebration-banner" id="celebrationBanner" role="status" aria-live="polite">
+        <div class="celebration-content">
+          <div class="celebration-badge">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <div>
+            <strong>All today's tasks complete!</strong>
+            <div style="font-size: 0.84rem; color: var(--text-secondary);">You hit 100% completion for the day. Take a breather or review your daily summary.</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-ghost" id="bannerSummaryBtn">View Summary</button>
+      </section>
+
+      <!-- ELECTRIC BLUE HERO CARD -->
       <div class="card greeting-card">
         <div class="greeting-top">
           <div>
@@ -104,9 +133,8 @@
             <svg class="progress-ring" viewBox="0 0 128 128">
               <defs>
                 <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#6366f1"></stop>
-                  <stop offset="50%" stop-color="#8b5cf6"></stop>
-                  <stop offset="100%" stop-color="#10b981"></stop>
+                  <stop offset="0%" stop-color="#E3FF3B"></stop>
+                  <stop offset="100%" stop-color="#33A4FA"></stop>
                 </linearGradient>
               </defs>
               <circle class="progress-ring-track" cx="64" cy="64" r="54"></circle>
@@ -145,104 +173,168 @@
         </div>
       </div>
 
-      <!-- LIVE DAILY SUMMARY SNAPSHOT -->
-      <aside class="card summary-card">
-        <div class="summary-header">
-          <div class="summary-title">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 20V10"></path>
-              <path d="M18 20V4"></path>
-              <path d="M6 20v-4"></path>
-            </svg>
-            Daily Summary
-          </div>
-          <span class="summary-pill" id="summaryScorePill">0% Productive</span>
-        </div>
+      <!-- QUICK ADD BAR -->
+      <section class="card quick-add-card">
+        <form class="quick-add-form" id="quickAddForm">
+          <input
+            type="text"
+            id="quickTitle"
+            class="quick-add-input"
+            placeholder="Quick add a task for today... (Press Enter)"
+            required
+            maxlength="140"
+          />
+          <select id="quickPriority" class="quick-select" aria-label="Task priority">
+            <option value="Medium">Medium Priority</option>
+            <option value="High">High Priority</option>
+            <option value="Low">Low Priority</option>
+          </select>
+          <select id="quickCategory" class="quick-select" aria-label="Task category">
+            <option value="Work">Work</option>
+            <option value="Study">Study</option>
+            <option value="Personal">Personal</option>
+            <option value="Health">Health</option>
+            <option value="Other">Other</option>
+          </select>
+          <input type="time" id="quickTime" class="quick-select" aria-label="Task time" title="Optional deadline time" />
+          <button type="submit" class="btn btn-primary">Add Task</button>
+        </form>
+      </section>
 
-        <div class="summary-metrics">
-          <div class="summary-mini">
-            <span>Planned Today</span>
-            <strong id="sumPlanned">0</strong>
+      <!-- INTERACTIVE PENXIL BENTO SHORTCUTS -->
+      <section class="bento-quick-grid">
+        <button type="button" class="bento-card bento-lime" data-goto="tasks">
+          <div class="bento-top">
+            <span class="bento-tag">Focus Workspace</span>
+            <span class="bento-arrow" aria-hidden="true">↗</span>
           </div>
-          <div class="summary-mini">
-            <span>Completed</span>
-            <strong id="sumCompleted" style="color: var(--success);">0</strong>
+          <div>
+            <h2 class="bento-title">Open My Tasks</h2>
+            <p class="bento-desc" id="bentoTasksText">0 tasks waiting in your list</p>
           </div>
-          <div class="summary-mini">
-            <span>Remaining</span>
-            <strong id="sumRemaining" style="color: var(--warning);">0</strong>
-          </div>
-          <div class="summary-mini">
-            <span>High Priority Left</span>
-            <strong id="sumHighLeft" style="color: var(--danger);">0</strong>
-          </div>
-        </div>
-
-        <p class="summary-narrative" id="summaryNarrative">
-          Plan a few tasks for today to start tracking your daily productivity score.
-        </p>
-
-        <button type="button" class="btn btn-ghost" id="cardFullSummaryBtn" style="width: 100%;">
-          Open Detailed End-of-Day Report
         </button>
-      </aside>
-    </section>
 
-    <!-- QUICK ADD BAR -->
-    <section class="card quick-add-card">
-      <form class="quick-add-form" id="quickAddForm">
-        <input
-          type="text"
-          id="quickTitle"
-          class="quick-add-input"
-          placeholder="Quick add a task for today... (Press Enter)"
-          required
-          maxlength="140"
-        />
-        <select id="quickPriority" class="quick-select" aria-label="Task priority">
-          <option value="Medium">Medium Priority</option>
-          <option value="High">High Priority</option>
-          <option value="Low">Low Priority</option>
-        </select>
-        <select id="quickCategory" class="quick-select" aria-label="Task category">
-          <option value="Work">Work</option>
-          <option value="Study">Study</option>
-          <option value="Personal">Personal</option>
-          <option value="Health">Health</option>
-          <option value="Other">Other</option>
-        </select>
-        <input type="time" id="quickTime" class="quick-select" aria-label="Task time" title="Optional deadline time" />
-        <button type="submit" class="btn btn-primary">Add Task</button>
-      </form>
-    </section>
+        <button type="button" class="bento-card bento-navy" data-goto="summary">
+          <div class="bento-top">
+            <span class="bento-tag">Daily Insights</span>
+            <span class="bento-arrow" aria-hidden="true">↗</span>
+          </div>
+          <div>
+            <h2 class="bento-title">Productivity Report</h2>
+            <p class="bento-desc" id="bentoSummaryText">0% daily completion so far</p>
+          </div>
+        </button>
+      </section>
+    </div>
 
-    <!-- FILTERS & MANAGEMENT TOOLBAR -->
-    <section class="toolbar">
-      <div class="filter-pills" id="filterPills" role="tablist" aria-label="Task filters">
-        <button type="button" class="filter-pill active" data-filter="all">All Tasks <span class="filter-count" id="count-all">0</span></button>
-        <button type="button" class="filter-pill" data-filter="today">Today <span class="filter-count" id="count-today">0</span></button>
-        <button type="button" class="filter-pill" data-filter="upcoming">Upcoming <span class="filter-count" id="count-upcoming">0</span></button>
-        <button type="button" class="filter-pill" data-filter="pending">Pending <span class="filter-count" id="count-pending">0</span></button>
-        <button type="button" class="filter-pill" data-filter="completed">Completed <span class="filter-count" id="count-completed">0</span></button>
-        <button type="button" class="filter-pill" data-filter="high">High Priority <span class="filter-count" id="count-high">0</span></button>
+    <!-- =====================================
+         SECTION 2: MY TASKS WORKSPACE
+         ===================================== -->
+    <div class="app-section" id="section-tasks" data-section="tasks">
+      <div class="section-heading-row">
+        <div>
+          <h2 class="section-title">My Tasks</h2>
+          <p class="section-subtitle">Filter, organise, and check off your schedule.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="tasksQuickModalBtn">+ Add Task</button>
       </div>
 
-      <div class="toolbar-actions">
-        <select id="categoryFilter" class="quick-select" aria-label="Filter by category">
-          <option value="ALL">All Categories</option>
-          <option value="Work">Work</option>
-          <option value="Study">Study</option>
-          <option value="Personal">Personal</option>
-          <option value="Health">Health</option>
-          <option value="Other">Other</option>
-        </select>
-        <button type="button" class="btn btn-ghost" id="clearCompletedBtn">Clear Completed</button>
-        <button type="button" class="btn btn-danger-soft" id="resetTodayBtn">Reset Today</button>
-      </div>
-    </section>
+      <!-- FILTERS & MANAGEMENT TOOLBAR -->
+      <section class="toolbar">
+        <div class="filter-pills" id="filterPills" role="tablist" aria-label="Task filters">
+          <button type="button" class="filter-pill active" data-filter="all">All Tasks <span class="filter-count" id="count-all">0</span></button>
+          <button type="button" class="filter-pill" data-filter="today">Today <span class="filter-count" id="count-today">0</span></button>
+          <button type="button" class="filter-pill" data-filter="upcoming">Upcoming <span class="filter-count" id="count-upcoming">0</span></button>
+          <button type="button" class="filter-pill" data-filter="pending">Pending <span class="filter-count" id="count-pending">0</span></button>
+          <button type="button" class="filter-pill" data-filter="completed">Completed <span class="filter-count" id="count-completed">0</span></button>
+          <button type="button" class="filter-pill" data-filter="high">High Priority <span class="filter-count" id="count-high">0</span></button>
+        </div>
 
-    <!-- DYNAMIC TASK GROUPS -->
-    <section class="tasks-container" id="tasksContainer" aria-live="polite"></section>
+        <div class="toolbar-actions">
+          <select id="categoryFilter" class="quick-select" aria-label="Filter by category">
+            <option value="ALL">All Categories</option>
+            <option value="Work">Work</option>
+            <option value="Study">Study</option>
+            <option value="Personal">Personal</option>
+            <option value="Health">Health</option>
+            <option value="Other">Other</option>
+          </select>
+          <button type="button" class="btn btn-ghost" id="clearCompletedBtn">Clear Completed</button>
+          <button type="button" class="btn btn-danger-soft" id="resetTodayBtn">Reset Today</button>
+        </div>
+      </section>
+
+      <!-- DYNAMIC TASK GROUPS -->
+      <section class="tasks-container" id="tasksContainer" aria-live="polite"></section>
+    </div>
+
+    <!-- =====================================
+         SECTION 3: DAILY SUMMARY & ANALYTICS
+         ===================================== -->
+    <div class="app-section" id="section-summary" data-section="summary">
+      <div class="section-heading-row">
+        <div>
+          <h2 class="section-title">Daily Performance Summary</h2>
+          <p class="section-subtitle">End-of-day snapshot and category breakdown.</p>
+        </div>
+      </div>
+
+      <div class="summary-section-grid">
+        <aside class="card summary-card">
+          <div class="summary-header">
+            <div class="summary-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue-end)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20V10"></path>
+                <path d="M18 20V4"></path>
+                <path d="M6 20v-4"></path>
+              </svg>
+              Today's Scorecard
+            </div>
+            <span class="summary-pill" id="summaryScorePill">0% Productive</span>
+          </div>
+
+          <div class="summary-metrics">
+            <div class="summary-mini">
+              <span>Planned Today</span>
+              <strong id="sumPlanned">0</strong>
+            </div>
+            <div class="summary-mini">
+              <span>Completed</span>
+              <strong id="sumCompleted" style="color: var(--success);">0</strong>
+            </div>
+            <div class="summary-mini">
+              <span>Remaining</span>
+              <strong id="sumRemaining" style="color: var(--warning);">0</strong>
+            </div>
+            <div class="summary-mini">
+              <span>High Priority Left</span>
+              <strong id="sumHighLeft" style="color: var(--danger);">0</strong>
+            </div>
+          </div>
+
+          <p class="summary-narrative" id="summaryNarrative">
+            Plan a few tasks for today to start tracking your daily productivity score.
+          </p>
+
+          <button type="button" class="btn btn-ghost" id="cardFullSummaryBtn" style="width: 100%;">
+            Open Fullscreen Report Modal
+          </button>
+        </aside>
+
+        <section class="card summary-card">
+          <div class="summary-header">
+            <div class="summary-title">Category Breakdown</div>
+            <span class="badge badge-category">Today</span>
+          </div>
+          <div class="breakdown-list" id="inlineBreakdownList">
+            <p style="font-size: 0.88rem; color: var(--text-muted);">Add tasks for today to see category progress.</p>
+          </div>
+          <button type="button" class="btn btn-primary" data-goto="tasks" style="width: 100%;">
+            Manage Today's Tasks ↗
+          </button>
+        </section>
+      </div>
+    </div>
   </main>
 
   <!-- ADD / EDIT TASK MODAL -->
