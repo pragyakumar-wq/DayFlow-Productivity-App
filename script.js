@@ -942,4 +942,111 @@
   }
 
   initInteractiveEffects();
+
+
+  /* ---- Multi-Section Tab Navigation & Live Sync ---- */
+  function switchSection(sectionName) {
+    document.querySelectorAll('.app-section').forEach(sec => {
+      sec.classList.toggle('active', sec.dataset.section === sectionName);
+    });
+    document.querySelectorAll('[data-section-btn]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.sectionBtn === sectionName);
+    });
+
+    if (sectionName === 'summary') renderInlineBreakdown();
+    syncSectionWidgets();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function renderInlineBreakdown() {
+    const listEl = document.getElementById('inlineBreakdownList');
+    if (!listEl) return;
+
+    const stats = getTodayStats();
+    const categories = ['Work', 'Study', 'Personal', 'Health', 'Other'];
+    const rows = categories
+      .map(cat => {
+        const catTasks = stats.todayTasks.filter(t => t.category === cat);
+        if (catTasks.length === 0) return '';
+        const done = catTasks.filter(t => t.completed).length;
+        const pct = Math.round((done / catTasks.length) * 100);
+        return `
+          <div class="breakdown-item">
+            <div class="breakdown-row">
+              <span>${escapeHtml(cat)}</span>
+              <span style="color: var(--text-secondary);">${done}/${catTasks.length} (${pct}%)</span>
+            </div>
+            <div class="breakdown-bar">
+              <div class="breakdown-fill" style="width: ${pct}%;"></div>
+            </div>
+          </div>
+        `;
+      })
+      .filter(Boolean)
+      .join('');
+
+    listEl.innerHTML =
+      rows || '<p style="font-size: 0.88rem; color: var(--text-muted);">No tasks planned for today yet. Add a task from Dashboard or My Tasks.</p>';
+  }
+
+  function syncSectionWidgets() {
+    const stats = getTodayStats();
+    const totalPendingAll = tasks.filter(t => !t.completed).length;
+
+    const badge = document.getElementById('navPendingBadge');
+    if (badge) badge.textContent = totalPendingAll;
+
+    const tasksText = document.getElementById('bentoTasksText');
+    if (tasksText) {
+      tasksText.textContent =
+        totalPendingAll === 0
+          ? 'All caught up! Add something new.'
+          : `${totalPendingAll} pending ${totalPendingAll === 1 ? 'task' : 'tasks'} in your workspace`;
+    }
+
+    const summaryText = document.getElementById('bentoSummaryText');
+    if (summaryText) {
+      summaryText.textContent = `${stats.percent}% productivity today (${stats.completed}/${stats.total} done)`;
+    }
+
+    // Hide the 0% dot on the progress ring
+    const ring = document.getElementById('progressRingFill');
+    if (ring) ring.style.opacity = stats.percent === 0 ? '0' : '1';
+
+    renderInlineBreakdown();
+  }
+
+  function initSectionNavigation() {
+    // Top / Bottom nav tabs
+    document.getElementById('sectionNav').addEventListener('click', e => {
+      const btn = e.target.closest('[data-section-btn]');
+      if (btn) switchSection(btn.dataset.sectionBtn);
+    });
+
+    // Bento cards & shortcut buttons
+    document.addEventListener('click', e => {
+      const gotoEl = e.target.closest('[data-goto]');
+      if (gotoEl) switchSection(gotoEl.dataset.goto);
+    });
+
+    // "+ Add Task" button inside My Tasks section
+    const tasksAddBtn = document.getElementById('tasksQuickModalBtn');
+    if (tasksAddBtn) tasksAddBtn.addEventListener('click', () => openTaskModal());
+
+    // Typing in Search automatically opens My Tasks section
+    const searchEl = document.getElementById('searchInput');
+    if (searchEl) {
+      searchEl.addEventListener('input', () => {
+        if (searchEl.value.trim().length > 0) switchSection('tasks');
+      });
+    }
+
+    // Keep badges & inline breakdown synced after any task change
+    document.addEventListener('click', () => setTimeout(syncSectionWidgets, 30));
+    document.addEventListener('submit', () => setTimeout(syncSectionWidgets, 30));
+
+    syncSectionWidgets();
+  }
+
+  initSectionNavigation();
 })();
