@@ -4,10 +4,12 @@
   const STORAGE_KEYS = {
     TASKS: 'dayflow_tasks_v1',
     THEME: 'dayflow_theme_v1',
-    INITIALIZED: 'dayflow_initialized_v1'
+    INITIALIZED: 'dayflow_initialized_v1',
+    FOCUS_LOG: 'dayflow_focus_log_v1'
   };
 
-  const RING_CIRCUMFERENCE = 2 * Math.PI * 54;
+  const RING_CIRCUMFERENCE = 2 * Math.PI * 54;   // 339.292
+  const FOCUS_CIRCUMFERENCE = 2 * Math.PI * 96;  // 603.185
   const PRIORITY_WEIGHT = { High: 3, Medium: 2, Low: 1 };
 
   let tasks = [];
@@ -17,7 +19,28 @@
   let previousTodayPercent = null;
   let pendingConfirmCallback = null;
 
-  /* ---- Date & Utility Helpers ---- */
+  // Calendar state
+  const initNow = new Date();
+  let calYear = initNow.getFullYear();
+  let calMonth = initNow.getMonth();
+  let calSelectedISO = getLocalDateISO(initNow);
+
+  // Focus Timer state
+  let focusMode = 'focus'; // 'focus' | 'short' | 'long'
+  let focusTotalSec = 25 * 60;
+  let focusRemainingSec = 25 * 60;
+  let focusIsRunning = false;
+  let focusEndTimestamp = null;
+  let focusIntervalId = null;
+  let focusSoundEnabled = true;
+  let focusLog = {}; // { 'YYYY-MM-DD': { sessions: number, minutes: number } }
+
+  // PWA Install Prompt
+  let deferredInstallPrompt = null;
+
+  /* =========================================
+     1. DATE & UTILITY HELPERS
+     ========================================= */
   function getLocalDateISO(date = new Date()) {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -34,8 +57,7 @@
   function formatDisplayDate(isoDate) {
     if (!isoDate) return '';
     const [y, m, d] = isoDate.split('-').map(Number);
-    const dt = new Date(y, m - 1, d);
-    return dt.toLocaleDateString('en-IN', {
+    return new Date(y, m - 1, d).toLocaleDateString('en-IN', {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
@@ -66,7 +88,9 @@
     return 'tsk_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
   }
 
-  /* ---- LocalStorage ---- */
+  /* =========================================
+     2. LOCALSTORAGE LOAD / SAVE
+     ========================================= */
   function loadTasks() {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.TASKS);
@@ -78,7 +102,7 @@
         }
       }
     } catch (err) {
-      console.error('Failed to read tasks from LocalStorage:', err);
+      console.error('Failed to read tasks:', err);
     }
 
     if (!localStorage.getItem(STORAGE_KEYS.INITIALIZED)) {
@@ -88,7 +112,7 @@
         {
           id: generateId(),
           title: 'Plan top 3 priorities for today',
-          description: 'Review calendar, block deep-work slots, and align key outcomes.',
+          description: 'Review schedule, block deep-work slots, and align key outcomes.',
           priority: 'High',
           category: 'Work',
           date: today,
@@ -98,19 +122,19 @@
         },
         {
           id: generateId(),
-          title: '60-minute focused study / deep work session',
-          description: 'Keep notifications muted and wrap up the primary deliverable.',
+          title: '25-minute Focus Timer study session',
+          description: 'Link this task in the Focus tab and complete one uninterrupted Pomodoro.',
           priority: 'High',
           category: 'Study',
           date: today,
-          time: '14:00',
+          time: '16:00',
           completed: false,
           createdAt: new Date().toISOString()
         },
         {
           id: generateId(),
-          title: 'Evening walk and 15-minute stretch',
-          description: 'Step away from screens and recharge energy.',
+          title: 'Evening walk & quick stretch',
+          description: 'Step away from screens and recharge.',
           priority: 'Medium',
           category: 'Health',
           date: today,
@@ -120,8 +144,8 @@
         },
         {
           id: generateId(),
-          title: 'Organise weekly budget & notes',
-          description: 'Quick personal review scheduled for tomorrow.',
+          title: 'Review upcoming week on Calendar',
+          description: 'Add deadlines and personal goals for tomorrow.',
           priority: 'Low',
           category: 'Personal',
           date: tomorrow,
@@ -139,21 +163,48 @@
     try {
       localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
     } catch (err) {
-      console.error('Failed to save tasks to LocalStorage:', err);
+      console.error('Failed to save tasks:', err);
     }
   }
 
-  /* ---- Theme ---- */
+  function loadFocusLog() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.FOCUS_LOG);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') focusLog = parsed;
+      }
+    } catch (err) {
+      console.error('Failed to read focus log:', err);
+    }
+  }
+
+  function saveFocusLog() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.FOCUS_LOG, JSON.stringify(focusLog));
+    } catch (err) {
+      console.error('Failed to save focus log:', err);
+    }
+  }
+
+  function getTodayFocusStats() {
+    const todayISO = getLocalDateISO();
+    return focusLog[todayISO] || { sessions: 0, minutes: 0 };
+  }
+
+  /* =========================================
+     3. THEME & GREETING
+     ========================================= */
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-    const sun = document.getElementById('themeIconSun');
-    const moon = document.getElementById('themeIconMoon');
-    sun.style.display = theme === 'dark' ? 'block' : 'none';
-    moon.style.display = theme === 'dark' ? 'none' : 'block';
+    document.getElementById('themeIconSun').style.display = theme === 'dark' ? 'block' : 'none';
+    document.getElementById('themeIconMoon').style.display = theme === 'dark' ? 'none' : 'block';
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) metaTheme.setAttribute('content', theme === 'dark' ? '#3A4EFB' : '#DEE0ED');
     try {
       localStorage.setItem(STORAGE_KEYS.THEME, theme);
     } catch (err) {
-      console.error('Could not save theme preference:', err);
+      console.error('Theme save failed:', err);
     }
   }
 
@@ -162,7 +213,6 @@
     applyTheme(saved === 'light' ? 'light' : 'dark');
   }
 
-  /* ---- Greeting & Date ---- */
   function updateGreetingAndDate() {
     const now = new Date();
     const hour = now.getHours();
@@ -181,7 +231,9 @@
     });
   }
 
-  /* ---- Progress & Summary ---- */
+  /* =========================================
+     4. DASHBOARD METRICS & SUMMARY
+     ========================================= */
   function getTodayStats() {
     const todayISO = getLocalDateISO();
     const todayTasks = tasks.filter(t => t.date === todayISO);
@@ -203,20 +255,55 @@
   }
 
   function getDailyPerformanceNarrative(stats) {
-    if (stats.total === 0) return 'No tasks planned for today yet. Use Quick Add below to structure your day.';
-    if (stats.percent === 100) return `Outstanding execution—you completed all ${stats.total} planned tasks today. Your consistency is paying off.`;
-    if (stats.percent >= 75) return `Strong day overall (${stats.percent}% done). Wrap up the remaining ${stats.pending} ${stats.pending === 1 ? 'task' : 'tasks'} to close on a high note.`;
+    const fStats = getTodayFocusStats();
+    const focusSuffix = fStats.minutes > 0 ? ` Plus ${fStats.minutes} min of deep focus logged.` : '';
+    if (stats.total === 0) return 'No tasks planned for today yet. Use Quick Add to structure your day.' + focusSuffix;
+    if (stats.percent === 100) return `Outstanding execution—you completed all ${stats.total} planned tasks today.${focusSuffix}`;
+    if (stats.percent >= 75) return `Strong day overall (${stats.percent}% done). Wrap up the remaining ${stats.pending} ${stats.pending === 1 ? 'task' : 'tasks'}.${focusSuffix}`;
     if (stats.percent >= 40) {
       const highNote = stats.highPending > 0
         ? ` Prioritise your ${stats.highPending} high-priority item${stats.highPending > 1 ? 's' : ''} next.`
         : ' Steady progress so far.';
-      return `You have finished ${stats.completed} of ${stats.total} tasks today.${highNote}`;
+      return `You finished ${stats.completed} of ${stats.total} tasks today.${highNote}${focusSuffix}`;
     }
-    return `You still have ${stats.pending} of ${stats.total} tasks open today. Pick one priority task and give it 20 uninterrupted minutes.`;
+    return `You have ${stats.pending} of ${stats.total} tasks open today. Try a 25-minute Focus Timer session to knock one out.${focusSuffix}`;
+  }
+
+  function renderInlineBreakdown() {
+    const listEl = document.getElementById('inlineBreakdownList');
+    if (!listEl) return;
+
+    const stats = getTodayStats();
+    const categories = ['Work', 'Study', 'Personal', 'Health', 'Other'];
+    const rows = categories
+      .map(cat => {
+        const catTasks = stats.todayTasks.filter(t => t.category === cat);
+        if (catTasks.length === 0) return '';
+        const done = catTasks.filter(t => t.completed).length;
+        const pct = Math.round((done / catTasks.length) * 100);
+        return `
+          <div class="breakdown-item">
+            <div class="breakdown-row">
+              <span>${escapeHtml(cat)}</span>
+              <span style="color: var(--text-secondary);">${done}/${catTasks.length} (${pct}%)</span>
+            </div>
+            <div class="breakdown-bar">
+              <div class="breakdown-fill" style="width: ${pct}%;"></div>
+            </div>
+          </div>
+        `;
+      })
+      .filter(Boolean)
+      .join('');
+
+    listEl.innerHTML =
+      rows || '<p style="font-size: 0.88rem; color: var(--text-muted);">No tasks planned for today yet.</p>';
   }
 
   function updateDashboardMetrics() {
     const stats = getTodayStats();
+    const fStats = getTodayFocusStats();
+    const todayISO = getLocalDateISO();
 
     document.getElementById('statTotalToday').textContent = stats.total;
     document.getElementById('statCompletedToday').textContent = stats.completed;
@@ -224,19 +311,40 @@
     document.getElementById('progressPercentLabel').textContent = `${stats.percent}%`;
     document.getElementById('linearProgressRatio').textContent = `${stats.completed} of ${stats.total} done`;
 
+    const ring = document.getElementById('progressRingFill');
     const offset = RING_CIRCUMFERENCE * (1 - stats.percent / 100);
-    document.getElementById('progressRingFill').style.strokeDashoffset = offset.toFixed(2);
+    ring.style.strokeDashoffset = offset.toFixed(2);
+    ring.style.opacity = stats.percent === 0 ? '0' : '1';
     document.getElementById('linearProgressFill').style.width = `${stats.percent}%`;
 
-    document.getElementById('motivationMessage').textContent = getMotivationalMessage(stats.total, stats.completed, stats.percent);
+    document.getElementById('motivationMessage').textContent = getMotivationalMessage(
+      stats.total,
+      stats.completed,
+      stats.percent
+    );
 
+    // Summary section metrics
     document.getElementById('sumPlanned').textContent = stats.total;
     document.getElementById('sumCompleted').textContent = stats.completed;
     document.getElementById('sumRemaining').textContent = stats.pending;
-    document.getElementById('sumHighLeft').textContent = stats.highPending;
+    document.getElementById('sumFocusTime').textContent = `${fStats.minutes} min`;
     document.getElementById('summaryScorePill').textContent = `${stats.percent}% Productive`;
     document.getElementById('summaryNarrative').textContent = getDailyPerformanceNarrative(stats);
 
+    // Bento & nav badges
+    const totalPendingAll = tasks.filter(t => !t.completed).length;
+    const upcomingCount = tasks.filter(t => t.date > todayISO && !t.completed).length;
+    document.getElementById('navPendingBadge').textContent = totalPendingAll;
+    document.getElementById('bentoTasksText').textContent =
+      totalPendingAll === 0 ? 'All caught up!' : `${totalPendingAll} pending ${totalPendingAll === 1 ? 'task' : 'tasks'}`;
+    document.getElementById('bentoCalendarText').textContent =
+      upcomingCount === 0 ? 'Plan upcoming dates' : `${upcomingCount} upcoming scheduled`;
+    document.getElementById('bentoFocusText').textContent =
+      `${fStats.minutes} min • ${fStats.sessions} ${fStats.sessions === 1 ? 'session' : 'sessions'} today`;
+    document.getElementById('bentoSummaryText').textContent =
+      `${stats.percent}% done (${stats.completed}/${stats.total})`;
+
+    // Celebration banner & confetti
     const banner = document.getElementById('celebrationBanner');
     if (stats.total > 0 && stats.percent === 100) {
       banner.classList.add('visible');
@@ -249,16 +357,20 @@
     }
     previousTodayPercent = stats.percent;
 
-    const todayISO = getLocalDateISO();
+    // Filter counts
     document.getElementById('count-all').textContent = tasks.length;
     document.getElementById('count-today').textContent = tasks.filter(t => t.date === todayISO).length;
     document.getElementById('count-upcoming').textContent = tasks.filter(t => t.date > todayISO).length;
     document.getElementById('count-pending').textContent = tasks.filter(t => !t.completed).length;
     document.getElementById('count-completed').textContent = tasks.filter(t => t.completed).length;
     document.getElementById('count-high').textContent = tasks.filter(t => t.priority === 'High').length;
+
+    renderInlineBreakdown();
   }
 
-  /* ---- Filtering & Rendering ---- */
+  /* =========================================
+     5. TASKS LIST RENDERING
+     ========================================= */
   function getFilteredTasks() {
     const todayISO = getLocalDateISO();
     const q = searchQuery.trim().toLowerCase();
@@ -305,31 +417,17 @@
           <div class="task-top-row">
             <div class="task-title">${escapeHtml(task.title)}</div>
             <div class="task-actions">
-              ${task.completed ? `
+              ${!task.completed ? `
+                <button type="button" class="action-btn undo" data-action="focus-task" data-id="${escapeHtml(task.id)}" title="Start Focus Timer on this task">
+                  Focus
+                </button>
+              ` : `
                 <button type="button" class="action-btn undo" data-action="toggle" data-id="${escapeHtml(task.id)}" title="Undo completion">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="9 14 4 9 9 4"></polyline>
-                    <path d="M20 20v-7a4 4 0 0 0-4-4H4"></path>
-                  </svg>
                   Undo
                 </button>
-              ` : ''}
-              <button type="button" class="action-btn" data-action="edit" data-id="${escapeHtml(task.id)}" title="Edit task">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-                Edit
-              </button>
-              <button type="button" class="action-btn delete" data-action="delete" data-id="${escapeHtml(task.id)}" title="Delete task">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-                  <path d="M10 11v6"></path>
-                  <path d="M14 11v6"></path>
-                </svg>
-                Delete
-              </button>
+              `}
+              <button type="button" class="action-btn" data-action="edit" data-id="${escapeHtml(task.id)}" title="Edit task">Edit</button>
+              <button type="button" class="action-btn delete" data-action="delete" data-id="${escapeHtml(task.id)}" title="Delete task">Delete</button>
             </div>
           </div>
 
@@ -384,7 +482,6 @@
       { key: 'upcoming', title: 'Upcoming Dates', dotClass: 'upcoming', items: [] },
       { key: 'history', title: 'Past History (Completed)', dotClass: 'history', items: [] }
     ];
-
     const map = Object.fromEntries(buckets.map(b => [b.key, b]));
 
     filtered.forEach(task => {
@@ -396,13 +493,16 @@
     });
 
     let html = '';
-
     buckets.forEach(bucket => {
       if (bucket.items.length === 0) return;
 
       const pendingItems = sortTasks(bucket.items.filter(t => !t.completed));
       const completedItems = sortTasks(bucket.items.filter(t => t.completed));
-      const showSplitHeaders = activeFilter !== 'pending' && activeFilter !== 'completed' && pendingItems.length > 0 && completedItems.length > 0;
+      const showSplit =
+        activeFilter !== 'pending' &&
+        activeFilter !== 'completed' &&
+        pendingItems.length > 0 &&
+        completedItems.length > 0;
 
       html += `
         <div class="date-group">
@@ -416,7 +516,7 @@
       `;
 
       if (pendingItems.length > 0) {
-        if (showSplitHeaders) html += `<div class="status-sublabel">Pending (${pendingItems.length})</div>`;
+        if (showSplit) html += `<div class="status-sublabel">Pending (${pendingItems.length})</div>`;
         html += `<div class="task-list">`;
         pendingItems.forEach(t => {
           html += renderTaskCard(t, t.date < todayISO && !t.completed);
@@ -425,7 +525,7 @@
       }
 
       if (completedItems.length > 0) {
-        if (showSplitHeaders) html += `<div class="status-sublabel">Completed (${completedItems.length})</div>`;
+        if (showSplit) html += `<div class="status-sublabel">Completed (${completedItems.length})</div>`;
         html += `<div class="task-list">`;
         completedItems.forEach(t => {
           html += renderTaskCard(t, false);
@@ -439,12 +539,254 @@
     container.innerHTML = html;
   }
 
+  /* =========================================
+     6. INTERACTIVE CALENDAR SECTION
+     ========================================= */
+  function renderCalendar() {
+    const grid = document.getElementById('calendarGrid');
+    const monthLabel = document.getElementById('calMonthLabel');
+    if (!grid || !monthLabel) return;
+
+    const firstDay = new Date(calYear, calMonth, 1);
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const startWeekday = firstDay.getDay();
+    const todayISO = getLocalDateISO();
+
+    monthLabel.textContent = firstDay.toLocaleDateString('en-IN', {
+      month: 'long',
+      year: 'numeric'
+    });
+
+    // Map tasks by date
+    const byDate = {};
+    tasks.forEach(t => {
+      if (!byDate[t.date]) byDate[t.date] = { pending: 0, done: 0 };
+      if (t.completed) byDate[t.date].done++;
+      else byDate[t.date].pending++;
+    });
+
+    let html = '';
+    for (let i = 0; i < startWeekday; i++) {
+      html += `<div class="cal-cell empty" aria-hidden="true"></div>`;
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const mStr = String(calMonth + 1).padStart(2, '0');
+      const dStr = String(day).padStart(2, '0');
+      const iso = `${calYear}-${mStr}-${dStr}`;
+      const info = byDate[iso];
+
+      const classes = ['cal-cell'];
+      if (iso === todayISO) classes.push('today');
+      if (iso === calSelectedISO) classes.push('selected');
+
+      let dotsHtml = '';
+      if (info) {
+        if (info.pending > 0) dotsHtml += `<span class="cal-dot pending"></span>`;
+        if (info.done > 0) dotsHtml += `<span class="cal-dot done"></span>`;
+      }
+
+      html += `
+        <button type="button" class="${classes.join(' ')}" data-cal-date="${iso}" aria-label="${formatDisplayDate(iso)}">
+          <span>${day}</span>
+          <span class="cal-dots">${dotsHtml}</span>
+        </button>
+      `;
+    }
+
+    grid.innerHTML = html;
+    renderCalendarAgenda();
+  }
+
+  function renderCalendarAgenda() {
+    const titleEl = document.getElementById('calSelectedDateTitle');
+    const listEl = document.getElementById('calAgendaList');
+    if (!titleEl || !listEl) return;
+
+    const todayISO = getLocalDateISO();
+    const label = calSelectedISO === todayISO
+      ? `Today — ${formatDisplayDate(calSelectedISO)}`
+      : formatDisplayDate(calSelectedISO);
+    titleEl.textContent = label;
+
+    const dayTasks = sortTasks(tasks.filter(t => t.date === calSelectedISO));
+
+    if (dayTasks.length === 0) {
+      listEl.innerHTML = `
+        <div style="text-align:center; padding: 28px 12px; color: var(--text-muted); font-size: 0.88rem;">
+          No tasks scheduled for this date.<br/>Click <strong>+ Add Here</strong> to plan one.
+        </div>
+      `;
+      return;
+    }
+
+    listEl.innerHTML = dayTasks
+      .map(t => renderTaskCard(t, t.date < todayISO && !t.completed))
+      .join('');
+  }
+
+  /* =========================================
+     7. FOCUS TIMER (POMODORO + WEB AUDIO CHIME)
+     ========================================= */
+  function playFocusChime() {
+    if (!focusSoundEnabled) return;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const notes = [523.25, 659.25, 783.99]; // C5 -> E5 -> G5
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const start = ctx.currentTime + idx * 0.16;
+        gain.gain.setValueAtTime(0.001, start);
+        gain.gain.exponentialRampToValueAtTime(0.18, start + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.45);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.48);
+      });
+    } catch (err) {
+      console.error('Audio chime skipped:', err);
+    }
+  }
+
+  function formatMMSS(sec) {
+    const clamped = Math.max(0, Math.ceil(sec));
+    const m = Math.floor(clamped / 60);
+    const s = clamped % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  function updateFocusUI() {
+    const timeStr = formatMMSS(focusRemainingSec);
+    document.getElementById('focusTimeDisplay').textContent = timeStr;
+
+    const ratio = focusTotalSec > 0 ? focusRemainingSec / focusTotalSec : 0;
+    const offset = FOCUS_CIRCUMFERENCE * (1 - ratio);
+    document.getElementById('focusRingFill').style.strokeDashoffset = offset.toFixed(2);
+
+    const startBtn = document.getElementById('focusStartPauseBtn');
+    startBtn.textContent = focusIsRunning ? 'Pause' : (focusRemainingSec < focusTotalSec ? 'Resume' : 'Start Focus');
+
+    const modeMap = { focus: 'DEEP FOCUS', short: 'SHORT BREAK', long: 'LONG BREAK' };
+    document.getElementById('focusStateLabel').textContent = modeMap[focusMode] || 'DEEP FOCUS';
+
+    const dot = document.getElementById('focusLiveDot');
+    if (dot) dot.classList.toggle('running', focusIsRunning);
+
+    document.title = focusIsRunning
+      ? `${timeStr} • ${modeMap[focusMode]} — DayFlow`
+      : 'DayFlow — Daily Productivity & Focus Suite';
+
+    const fStats = getTodayFocusStats();
+    document.getElementById('focusSessionsToday').textContent = fStats.sessions;
+    document.getElementById('focusMinutesToday').textContent = fStats.minutes;
+    document.getElementById('focusTodayMinutesPill').textContent = `${fStats.minutes} min`;
+  }
+
+  function syncFocusTaskDropdown() {
+    const select = document.getElementById('focusTaskSelect');
+    const completeBtn = document.getElementById('focusCompleteLinkedBtn');
+    const label = document.getElementById('focusActiveTaskLabel');
+    if (!select) return;
+
+    const currentVal = select.value;
+    const pendingTasks = sortTasks(tasks.filter(t => !t.completed));
+
+    let optionsHtml = `<option value="">— Free Focus Session —</option>`;
+    pendingTasks.forEach(t => {
+      optionsHtml += `<option value="${escapeHtml(t.id)}">${escapeHtml(t.title)} (${escapeHtml(t.category)})</option>`;
+    });
+    select.innerHTML = optionsHtml;
+
+    if (currentVal && pendingTasks.some(t => t.id === currentVal)) {
+      select.value = currentVal;
+    } else {
+      select.value = '';
+    }
+
+    const chosen = pendingTasks.find(t => t.id === select.value);
+    if (chosen) {
+      label.textContent = chosen.title;
+      completeBtn.style.display = 'inline-flex';
+    } else {
+      label.textContent = 'Free focus session';
+      completeBtn.style.display = 'none';
+    }
+  }
+
+  function setFocusDuration(minutes, mode = focusMode) {
+    pauseFocusTimer();
+    focusMode = mode;
+    focusTotalSec = Math.max(1, Math.min(180, minutes)) * 60;
+    focusRemainingSec = focusTotalSec;
+    document.getElementById('focusCustomMinutes').value = Math.round(focusTotalSec / 60);
+    updateFocusUI();
+  }
+
+  function startFocusTimer() {
+    if (focusIsRunning) return;
+    if (focusRemainingSec <= 0) focusRemainingSec = focusTotalSec;
+    focusIsRunning = true;
+    focusEndTimestamp = Date.now() + focusRemainingSec * 1000;
+
+    focusIntervalId = setInterval(() => {
+      const left = Math.round((focusEndTimestamp - Date.now()) / 1000);
+      if (left <= 0) {
+        focusRemainingSec = 0;
+        pauseFocusTimer();
+        handleFocusSessionComplete();
+      } else {
+        focusRemainingSec = left;
+        updateFocusUI();
+      }
+    }, 300);
+
+    updateFocusUI();
+  }
+
+  function pauseFocusTimer() {
+    focusIsRunning = false;
+    if (focusIntervalId) {
+      clearInterval(focusIntervalId);
+      focusIntervalId = null;
+    }
+    updateFocusUI();
+  }
+
+  function handleFocusSessionComplete() {
+    playFocusChime();
+    if (focusMode === 'focus') {
+      const todayISO = getLocalDateISO();
+      const minsLogged = Math.max(1, Math.round(focusTotalSec / 60));
+      if (!focusLog[todayISO]) focusLog[todayISO] = { sessions: 0, minutes: 0 };
+      focusLog[todayISO].sessions += 1;
+      focusLog[todayISO].minutes += minsLogged;
+      saveFocusLog();
+      launchConfetti();
+      showToast(`Focus session complete! +${minsLogged} min logged.`);
+    } else {
+      showToast('Break finished! Ready for your next focus block.');
+    }
+    focusRemainingSec = focusTotalSec;
+    renderAll();
+  }
+
+  /* =========================================
+     8. MASTER RENDER & CRUD
+     ========================================= */
   function renderAll() {
     updateDashboardMetrics();
     renderTasks();
+    renderCalendar();
+    syncFocusTaskDropdown();
+    updateFocusUI();
   }
 
-  /* ---- CRUD Operations ---- */
   function addTask({ title, description, priority, category, date, time }) {
     tasks.unshift({
       id: generateId(),
@@ -516,12 +858,14 @@
     });
   }
 
-  /* ---- Modals ---- */
+  /* =========================================
+     9. MODALS
+     ========================================= */
   const taskModalBackdrop = document.getElementById('taskModalBackdrop');
   const summaryModalBackdrop = document.getElementById('summaryModalBackdrop');
   const confirmModalBackdrop = document.getElementById('confirmModalBackdrop');
 
-  function openTaskModal(taskToEdit = null) {
+  function openTaskModal(taskToEdit = null, prefillDate = null) {
     const titleInput = document.getElementById('taskTitleInput');
     if (taskToEdit) {
       document.getElementById('taskModalTitle').textContent = 'Edit Task';
@@ -539,7 +883,7 @@
       document.getElementById('taskDescInput').value = '';
       document.getElementById('taskPriorityInput').value = 'Medium';
       document.getElementById('taskCategoryInput').value = 'Work';
-      document.getElementById('taskDateInput').value = getLocalDateISO();
+      document.getElementById('taskDateInput').value = prefillDate || getLocalDateISO();
       document.getElementById('taskTimeInput').value = '';
     }
     taskModalBackdrop.classList.add('open');
@@ -554,6 +898,7 @@
 
   function openSummaryModal() {
     const stats = getTodayStats();
+    const fStats = getTodayFocusStats();
     const categories = ['Work', 'Study', 'Personal', 'Health', 'Other'];
     const categoryRows = categories
       .map(cat => {
@@ -576,22 +921,20 @@
       .filter(Boolean)
       .join('');
 
-    const totalHistoryDone = tasks.filter(t => t.date < getLocalDateISO() && t.completed).length;
-
     document.getElementById('summaryModalBody').innerHTML = `
       <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; background:var(--input-bg); border:1px solid var(--border); padding:16px; border-radius:var(--radius-md);">
         <div>
           <div style="font-size:0.78rem; color:var(--text-muted); font-weight:600;">${escapeHtml(formatDisplayDate(getLocalDateISO()))}</div>
           <div style="font-size:1.75rem; font-weight:800; letter-spacing:-0.03em;">${stats.percent}% Productivity</div>
         </div>
-        <div class="summary-pill">${stats.completed} / ${stats.total} Tasks Done</div>
+        <div class="summary-pill">${stats.completed} / ${stats.total} Done</div>
       </div>
 
       <div class="summary-metrics">
         <div class="summary-mini"><span>Total Planned</span><strong>${stats.total}</strong></div>
         <div class="summary-mini"><span>Tasks Completed</span><strong style="color:var(--success);">${stats.completed}</strong></div>
-        <div class="summary-mini"><span>Tasks Remaining</span><strong style="color:var(--warning);">${stats.pending}</strong></div>
-        <div class="summary-mini"><span>Historical Tasks Done</span><strong style="color:var(--info);">${totalHistoryDone}</strong></div>
+        <div class="summary-mini"><span>Focus Sessions</span><strong style="color:var(--lime);">${fStats.sessions}</strong></div>
+        <div class="summary-mini"><span>Focus Minutes</span><strong style="color:var(--blue-end);">${fStats.minutes} min</strong></div>
       </div>
 
       <div class="summary-narrative">
@@ -643,7 +986,9 @@
     pendingConfirmCallback = null;
   }
 
-  /* ---- Toast & Confetti ---- */
+  /* =========================================
+     10. TOAST & CONFETTI
+     ========================================= */
   function showToast(message, options = {}) {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
@@ -682,7 +1027,7 @@
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const colors = ['#6366f1', '#10b981', '#f59e0b', '#38bdf8', '#ec4899', '#8b5cf6'];
+    const colors = ['#3A4EFB', '#33A4FA', '#E3FF3B', '#10b981', '#ff4d6d', '#ffffff'];
     const particles = Array.from({ length: 110 }, () => ({
       x: Math.random() * canvas.width,
       y: -20 - Math.random() * 140,
@@ -700,14 +1045,12 @@
     function animate() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       let active = 0;
-
       particles.forEach(p => {
         p.x += p.vx;
         p.y += p.vy;
         p.vy += 0.06;
         p.angle += p.spin;
         if (frame > 95) p.opacity = Math.max(0, p.opacity - 0.02);
-
         if (p.opacity > 0 && p.y < canvas.height + 30) {
           active++;
           ctx.save();
@@ -719,7 +1062,6 @@
           ctx.restore();
         }
       });
-
       frame++;
       if (active > 0 && frame < 200) requestAnimationFrame(animate);
       else ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -727,18 +1069,124 @@
     requestAnimationFrame(animate);
   }
 
-  /* ---- Event Bindings ---- */
+  /* =========================================
+     11. SECTION NAVIGATION, INTERACTIVE FX & PWA
+     ========================================= */
+  function switchSection(sectionName) {
+    document.querySelectorAll('.app-section').forEach(sec => {
+      sec.classList.toggle('active', sec.dataset.section === sectionName);
+    });
+    document.querySelectorAll('[data-section-btn]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.sectionBtn === sectionName);
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function initInteractiveEffects() {
+    const isFinePointer = window.matchMedia('(pointer: fine)').matches;
+
+    document.addEventListener('pointermove', e => {
+      if (!isFinePointer) return;
+      const target = e.target.closest('.card, .task-card');
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      target.style.setProperty('--mx', `${e.clientX - rect.left}px`);
+      target.style.setProperty('--my', `${e.clientY - rect.top}px`);
+
+      if (target.classList.contains('greeting-card') || target.classList.contains('focus-timer-card')) {
+        const x = (e.clientX - rect.left) / rect.width - 0.5;
+        const y = (e.clientY - rect.top) / rect.height - 0.5;
+        target.style.transform = `perspective(1100px) rotateX(${(-y * 3.5).toFixed(2)}deg) rotateY(${(x * 3.5).toFixed(2)}deg)`;
+      }
+    });
+
+    document.querySelectorAll('.greeting-card, .focus-timer-card').forEach(card => {
+      card.addEventListener('pointerleave', () => {
+        card.style.transform = '';
+      });
+    });
+
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('.btn, .filter-pill');
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height);
+      const ripple = document.createElement('span');
+      ripple.className = 'ripple-wave';
+      ripple.style.width = ripple.style.height = `${size}px`;
+      ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+      ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+      btn.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 580);
+    });
+  }
+
+  function initPWA() {
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+          console.warn('Service Worker registration skipped:', err);
+        });
+      });
+    }
+
+    const installBtn = document.getElementById('installAppBtn');
+
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      if (installBtn) installBtn.style.display = 'inline-flex';
+    });
+
+    if (installBtn) {
+      installBtn.addEventListener('click', async () => {
+        if (!deferredInstallPrompt) return;
+        deferredInstallPrompt.prompt();
+        const choice = await deferredInstallPrompt.userChoice;
+        if (choice.outcome === 'accepted') {
+          showToast('Installing DayFlow on your device...');
+        }
+        deferredInstallPrompt = null;
+        installBtn.style.display = 'none';
+      });
+    }
+
+    window.addEventListener('appinstalled', () => {
+      if (installBtn) installBtn.style.display = 'none';
+      showToast('DayFlow installed! You can now launch it from your home screen.');
+    });
+
+    window.addEventListener('offline', () => showToast('You are offline — DayFlow works locally.'));
+    window.addEventListener('online', () => showToast('Back online!'));
+  }
+
+  /* =========================================
+     12. EVENT BINDINGS
+     ========================================= */
   function bindEvents() {
+    // Theme toggle
     document.getElementById('themeToggleBtn').addEventListener('click', () => {
       const current = document.documentElement.getAttribute('data-theme');
       applyTheme(current === 'dark' ? 'light' : 'dark');
     });
 
+    // Section tabs & Bento shortcuts
+    document.getElementById('sectionNav').addEventListener('click', e => {
+      const btn = e.target.closest('[data-section-btn]');
+      if (btn) switchSection(btn.dataset.sectionBtn);
+    });
+
+    document.addEventListener('click', e => {
+      const gotoEl = e.target.closest('[data-goto]');
+      if (gotoEl) switchSection(gotoEl.dataset.goto);
+    });
+
+    // Quick-add form
     document.getElementById('quickAddForm').addEventListener('submit', e => {
       e.preventDefault();
       const titleEl = document.getElementById('quickTitle');
       if (!titleEl.value.trim()) return;
-
       addTask({
         title: titleEl.value,
         description: '',
@@ -747,13 +1195,14 @@
         date: getLocalDateISO(),
         time: document.getElementById('quickTime').value
       });
-
       titleEl.value = '';
       document.getElementById('quickTime').value = '';
       titleEl.focus();
     });
 
+    // Task modal buttons
     document.getElementById('openNewTaskBtn').addEventListener('click', () => openTaskModal());
+    document.getElementById('tasksQuickModalBtn').addEventListener('click', () => openTaskModal());
     document.getElementById('closeTaskModalBtn').addEventListener('click', closeTaskModal);
     document.getElementById('cancelTaskModalBtn').addEventListener('click', closeTaskModal);
     taskModalBackdrop.addEventListener('click', e => { if (e.target === taskModalBackdrop) closeTaskModal(); });
@@ -775,13 +1224,13 @@
       closeTaskModal();
     });
 
-    document.getElementById('openSummaryBtn').addEventListener('click', openSummaryModal);
+    // Summary modal
     document.getElementById('cardFullSummaryBtn').addEventListener('click', openSummaryModal);
-    document.getElementById('bannerSummaryBtn').addEventListener('click', openSummaryModal);
     document.getElementById('closeSummaryModalBtn').addEventListener('click', closeSummaryModal);
     document.getElementById('doneSummaryModalBtn').addEventListener('click', closeSummaryModal);
     summaryModalBackdrop.addEventListener('click', e => { if (e.target === summaryModalBackdrop) closeSummaryModal(); });
 
+    // Confirm modal
     document.getElementById('closeConfirmModalBtn').addEventListener('click', closeConfirmModal);
     document.getElementById('cancelConfirmBtn').addEventListener('click', closeConfirmModal);
     confirmModalBackdrop.addEventListener('click', e => { if (e.target === confirmModalBackdrop) closeConfirmModal(); });
@@ -790,11 +1239,12 @@
       closeConfirmModal();
     });
 
+    // Filters & Search
     document.getElementById('filterPills').addEventListener('click', e => {
       const btn = e.target.closest('.filter-pill');
       if (!btn) return;
       activeFilter = btn.dataset.filter;
-      document.querySelectorAll('.filter-pill').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('#filterPills .filter-pill').forEach(el => el.classList.remove('active'));
       btn.classList.add('active');
       renderTasks();
     });
@@ -809,6 +1259,7 @@
     searchInput.addEventListener('input', e => {
       searchQuery = e.target.value;
       searchClearBtn.classList.toggle('visible', searchQuery.length > 0);
+      if (searchQuery.trim().length > 0) switchSection('tasks');
       renderTasks();
     });
     searchClearBtn.addEventListener('click', () => {
@@ -819,6 +1270,7 @@
       searchInput.focus();
     });
 
+    // Clear Completed & Reset Today
     document.getElementById('clearCompletedBtn').addEventListener('click', () => {
       const todayISO = getLocalDateISO();
       const completedTodayCount = tasks.filter(t => t.date === todayISO && t.completed).length;
@@ -829,7 +1281,7 @@
       }
       openConfirmModal({
         title: 'Clear Completed Tasks',
-        message: `This will remove ${completedTodayCount} completed ${completedTodayCount === 1 ? 'task' : 'tasks'} from today while keeping your past task history safe.`,
+        message: `Remove ${completedTodayCount} completed task(s) from today while keeping your past task history safe.`,
         confirmLabel: 'Clear Completed',
         extraOptionText: `Also remove older completed tasks (${totalCompletedCount - completedTodayCount} historical)`,
         onConfirm: includeHistory => {
@@ -855,26 +1307,123 @@
       }
       openConfirmModal({
         title: "Reset Today's Tasks?",
-        message: `You are about to remove all ${todayCount} task(s) scheduled for today (${formatDisplayDate(todayISO)}). Historical and upcoming tasks will NOT be touched.`,
+        message: `Remove all ${todayCount} task(s) scheduled for today (${formatDisplayDate(todayISO)}). Historical and upcoming tasks will NOT be touched.`,
         confirmLabel: "Reset Today's Tasks",
         onConfirm: () => {
           tasks = tasks.filter(t => t.date !== todayISO);
           saveTasks();
           renderAll();
-          showToast("Today's tasks have been reset. Historical data preserved.");
+          showToast("Today's tasks reset. Historical data preserved.");
         }
       });
     });
 
-    document.getElementById('tasksContainer').addEventListener('click', e => {
+    // Delegated Task Actions (works in both Tasks tab & Calendar Agenda!)
+    function handleTaskActionClick(e) {
       const actionEl = e.target.closest('[data-action]');
       if (!actionEl) return;
       const { action, id } = actionEl.dataset;
-      if (action === 'toggle') toggleTaskCompletion(id);
-      else if (action === 'edit') {
+      if (action === 'toggle') {
+        toggleTaskCompletion(id);
+      } else if (action === 'edit') {
         const task = tasks.find(t => t.id === id);
         if (task) openTaskModal(task);
-      } else if (action === 'delete') deleteTask(id);
+      } else if (action === 'delete') {
+        deleteTask(id);
+      } else if (action === 'focus-task') {
+        const select = document.getElementById('focusTaskSelect');
+        if (select) {
+          select.value = id;
+          syncFocusTaskDropdown();
+        }
+        switchSection('focus');
+        showToast('Task linked to Focus Timer. Hit Start!');
+      }
+    }
+
+    document.getElementById('tasksContainer').addEventListener('click', handleTaskActionClick);
+    document.getElementById('calAgendaList').addEventListener('click', handleTaskActionClick);
+
+    // Calendar Controls
+    document.getElementById('calPrevMonthBtn').addEventListener('click', () => {
+      calMonth--;
+      if (calMonth < 0) { calMonth = 11; calYear--; }
+      renderCalendar();
+    });
+
+    document.getElementById('calNextMonthBtn').addEventListener('click', () => {
+      calMonth++;
+      if (calMonth > 11) { calMonth = 0; calYear++; }
+      renderCalendar();
+    });
+
+    document.getElementById('calTodayBtn').addEventListener('click', () => {
+      const now = new Date();
+      calYear = now.getFullYear();
+      calMonth = now.getMonth();
+      calSelectedISO = getLocalDateISO(now);
+      renderCalendar();
+    });
+
+    document.getElementById('calendarGrid').addEventListener('click', e => {
+      const cell = e.target.closest('[data-cal-date]');
+      if (!cell) return;
+      calSelectedISO = cell.dataset.calDate;
+      renderCalendar();
+    });
+
+    document.getElementById('calAddForDateBtn').addEventListener('click', () => {
+      openTaskModal(null, calSelectedISO);
+    });
+
+    // Focus Timer Controls
+    document.getElementById('focusModePills').addEventListener('click', e => {
+      const btn = e.target.closest('[data-focus-mode]');
+      if (!btn) return;
+      document.querySelectorAll('#focusModePills .filter-pill').forEach(el => el.classList.remove('active'));
+      btn.classList.add('active');
+      setFocusDuration(parseInt(btn.dataset.minutes, 10), btn.dataset.focusMode);
+    });
+
+    document.getElementById('focusStartPauseBtn').addEventListener('click', () => {
+      if (focusIsRunning) pauseFocusTimer();
+      else startFocusTimer();
+    });
+
+    document.getElementById('focusResetBtn').addEventListener('click', () => {
+      pauseFocusTimer();
+      focusRemainingSec = focusTotalSec;
+      updateFocusUI();
+    });
+
+    document.getElementById('focusPlusFiveBtn').addEventListener('click', () => {
+      focusTotalSec += 5 * 60;
+      focusRemainingSec += 5 * 60;
+      if (focusIsRunning && focusEndTimestamp) focusEndTimestamp += 5 * 60 * 1000;
+      updateFocusUI();
+      showToast('+5 minutes added.');
+    });
+
+    document.getElementById('focusApplyCustomBtn').addEventListener('click', () => {
+      const val = parseInt(document.getElementById('focusCustomMinutes').value, 10);
+      if (isNaN(val) || val < 1 || val > 180) {
+        showToast('Enter minutes between 1 and 180.');
+        return;
+      }
+      setFocusDuration(val, focusMode);
+      showToast(`Timer set to ${val} min.`);
+    });
+
+    document.getElementById('focusSoundToggleBtn').addEventListener('click', () => {
+      focusSoundEnabled = !focusSoundEnabled;
+      document.getElementById('focusSoundLabel').textContent = `Sound: ${focusSoundEnabled ? 'On' : 'Off'}`;
+    });
+
+    document.getElementById('focusTaskSelect').addEventListener('change', syncFocusTaskDropdown);
+
+    document.getElementById('focusCompleteLinkedBtn').addEventListener('click', () => {
+      const id = document.getElementById('focusTaskSelect').value;
+      if (id) toggleTaskCompletion(id);
     });
 
     document.addEventListener('keydown', e => {
@@ -886,167 +1435,17 @@
     });
   }
 
+  /* =========================================
+     13. BOOTSTRAP
+     ========================================= */
   initTheme();
   updateGreetingAndDate();
   loadTasks();
+  loadFocusLog();
   bindEvents();
-  renderAll();
-  setInterval(updateGreetingAndDate, 60000);
-
-
-
-
-
-  /* ---- Interactive Spotlight, 3D Card Tilt & Click Ripples ---- */
-  function initInteractiveEffects() {
-    const isFinePointer = window.matchMedia('(pointer: fine)').matches;
-
-    // 1. Cursor-tracking spotlight glow on cards & task cards
-    document.addEventListener('pointermove', e => {
-      if (!isFinePointer) return;
-      const target = e.target.closest('.card, .task-card');
-      if (!target) return;
-      const rect = target.getBoundingClientRect();
-      target.style.setProperty('--mx', `${e.clientX - rect.left}px`);
-      target.style.setProperty('--my', `${e.clientY - rect.top}px`);
-
-      // Subtle 3D tilt only on Hero & Summary cards
-      if (target.classList.contains('greeting-card') || target.classList.contains('summary-card')) {
-        const x = (e.clientX - rect.left) / rect.width - 0.5;
-        const y = (e.clientY - rect.top) / rect.height - 0.5;
-        target.style.transform = `perspective(1000px) rotateX(${(-y * 4).toFixed(2)}deg) rotateY(${(x * 4).toFixed(2)}deg) translateY(-2px)`;
-      }
-    });
-
-    // Reset 3D tilt smoothly when cursor leaves hero/summary cards
-    document.querySelectorAll('.greeting-card, .summary-card').forEach(card => {
-      card.addEventListener('pointerleave', () => {
-        card.style.transform = '';
-      });
-    });
-
-    // 2. Material-style ripple wave on buttons & filter pills
-    document.addEventListener('click', e => {
-      const btn = e.target.closest('.btn, .filter-pill');
-      if (!btn) return;
-      const rect = btn.getBoundingClientRect();
-      const size = Math.max(rect.width, rect.height);
-      const ripple = document.createElement('span');
-      ripple.className = 'ripple-wave';
-      ripple.style.width = ripple.style.height = `${size}px`;
-      ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
-      ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
-      btn.appendChild(ripple);
-      setTimeout(() => ripple.remove(), 580);
-    });
-  }
-
   initInteractiveEffects();
+  initPWA();
+  renderAll();
 
-
-  /* ---- Multi-Section Tab Navigation & Live Sync ---- */
-  function switchSection(sectionName) {
-    document.querySelectorAll('.app-section').forEach(sec => {
-      sec.classList.toggle('active', sec.dataset.section === sectionName);
-    });
-    document.querySelectorAll('[data-section-btn]').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.sectionBtn === sectionName);
-    });
-
-    if (sectionName === 'summary') renderInlineBreakdown();
-    syncSectionWidgets();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function renderInlineBreakdown() {
-    const listEl = document.getElementById('inlineBreakdownList');
-    if (!listEl) return;
-
-    const stats = getTodayStats();
-    const categories = ['Work', 'Study', 'Personal', 'Health', 'Other'];
-    const rows = categories
-      .map(cat => {
-        const catTasks = stats.todayTasks.filter(t => t.category === cat);
-        if (catTasks.length === 0) return '';
-        const done = catTasks.filter(t => t.completed).length;
-        const pct = Math.round((done / catTasks.length) * 100);
-        return `
-          <div class="breakdown-item">
-            <div class="breakdown-row">
-              <span>${escapeHtml(cat)}</span>
-              <span style="color: var(--text-secondary);">${done}/${catTasks.length} (${pct}%)</span>
-            </div>
-            <div class="breakdown-bar">
-              <div class="breakdown-fill" style="width: ${pct}%;"></div>
-            </div>
-          </div>
-        `;
-      })
-      .filter(Boolean)
-      .join('');
-
-    listEl.innerHTML =
-      rows || '<p style="font-size: 0.88rem; color: var(--text-muted);">No tasks planned for today yet. Add a task from Dashboard or My Tasks.</p>';
-  }
-
-  function syncSectionWidgets() {
-    const stats = getTodayStats();
-    const totalPendingAll = tasks.filter(t => !t.completed).length;
-
-    const badge = document.getElementById('navPendingBadge');
-    if (badge) badge.textContent = totalPendingAll;
-
-    const tasksText = document.getElementById('bentoTasksText');
-    if (tasksText) {
-      tasksText.textContent =
-        totalPendingAll === 0
-          ? 'All caught up! Add something new.'
-          : `${totalPendingAll} pending ${totalPendingAll === 1 ? 'task' : 'tasks'} in your workspace`;
-    }
-
-    const summaryText = document.getElementById('bentoSummaryText');
-    if (summaryText) {
-      summaryText.textContent = `${stats.percent}% productivity today (${stats.completed}/${stats.total} done)`;
-    }
-
-    // Hide the 0% dot on the progress ring
-    const ring = document.getElementById('progressRingFill');
-    if (ring) ring.style.opacity = stats.percent === 0 ? '0' : '1';
-
-    renderInlineBreakdown();
-  }
-
-  function initSectionNavigation() {
-    // Top / Bottom nav tabs
-    document.getElementById('sectionNav').addEventListener('click', e => {
-      const btn = e.target.closest('[data-section-btn]');
-      if (btn) switchSection(btn.dataset.sectionBtn);
-    });
-
-    // Bento cards & shortcut buttons
-    document.addEventListener('click', e => {
-      const gotoEl = e.target.closest('[data-goto]');
-      if (gotoEl) switchSection(gotoEl.dataset.goto);
-    });
-
-    // "+ Add Task" button inside My Tasks section
-    const tasksAddBtn = document.getElementById('tasksQuickModalBtn');
-    if (tasksAddBtn) tasksAddBtn.addEventListener('click', () => openTaskModal());
-
-    // Typing in Search automatically opens My Tasks section
-    const searchEl = document.getElementById('searchInput');
-    if (searchEl) {
-      searchEl.addEventListener('input', () => {
-        if (searchEl.value.trim().length > 0) switchSection('tasks');
-      });
-    }
-
-    // Keep badges & inline breakdown synced after any task change
-    document.addEventListener('click', () => setTimeout(syncSectionWidgets, 30));
-    document.addEventListener('submit', () => setTimeout(syncSectionWidgets, 30));
-
-    syncSectionWidgets();
-  }
-
-  initSectionNavigation();
+  setInterval(updateGreetingAndDate, 60000);
 })();

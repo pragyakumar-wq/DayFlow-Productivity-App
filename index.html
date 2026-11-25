@@ -2,9 +2,17 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DayFlow — Daily Productivity & To-Do Dashboard</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>DayFlow — Daily Productivity & Focus Suite</title>
+  <meta name="description" content="Organize daily tasks, plan on an interactive calendar, stay locked in with a Focus Timer, and track productivity." />
+  <meta name="theme-color" content="#3A4EFB" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="DayFlow" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <canvas id="confettiCanvas"></canvas>
@@ -35,8 +43,13 @@
           <button type="button" class="search-clear" id="searchClearBtn" aria-label="Clear search">&times;</button>
         </div>
 
-        <button type="button" class="btn btn-ghost" id="openSummaryBtn" title="View Daily Summary" style="display:none;">
-          <span class="btn-label-hide">Summary</span>
+        <button type="button" class="btn btn-install" id="installAppBtn" style="display:none;" title="Install DayFlow App">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span class="btn-label-hide">Install</span>
         </button>
 
         <button type="button" class="btn btn-ghost btn-icon" id="themeToggleBtn" aria-label="Toggle dark or light mode" title="Switch Theme">
@@ -69,7 +82,7 @@
 
   <!-- MAIN CONTENT -->
   <main class="container">
-    <!-- SECTION NAVIGATION TABS -->
+    <!-- 5-SECTION NAVIGATION TABS (Floating Bottom Dock on Mobile) -->
     <nav class="section-nav" id="sectionNav" aria-label="App sections">
       <button type="button" class="nav-tab active" data-section-btn="dashboard">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -86,8 +99,27 @@
           <path d="M9 11l3 3L22 4"></path>
           <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
         </svg>
-        <span>My Tasks</span>
+        <span>Tasks</span>
         <span class="nav-badge" id="navPendingBadge">0</span>
+      </button>
+
+      <button type="button" class="nav-tab" data-section-btn="calendar">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        <span>Calendar</span>
+      </button>
+
+      <button type="button" class="nav-tab" data-section-btn="focus">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        <span>Focus</span>
+        <span class="nav-live-dot" id="focusLiveDot" aria-hidden="true"></span>
       </button>
 
       <button type="button" class="nav-tab" data-section-btn="summary">
@@ -104,7 +136,6 @@
          SECTION 1: DASHBOARD OVERVIEW
          ===================================== -->
     <div class="app-section active" id="section-dashboard" data-section="dashboard">
-      <!-- CELEBRATION BANNER -->
       <section class="celebration-banner" id="celebrationBanner" role="status" aria-live="polite">
         <div class="celebration-content">
           <div class="celebration-badge">
@@ -114,10 +145,10 @@
           </div>
           <div>
             <strong>All today's tasks complete!</strong>
-            <div style="font-size: 0.84rem; color: var(--text-secondary);">You hit 100% completion for the day. Take a breather or review your daily summary.</div>
+            <div style="font-size: 0.84rem; color: var(--text-secondary);">You hit 100% completion for the day. Take a breather or review your summary.</div>
           </div>
         </div>
-        <button type="button" class="btn btn-ghost" id="bannerSummaryBtn">View Summary</button>
+        <button type="button" class="btn btn-ghost" data-goto="summary">View Summary</button>
       </section>
 
       <!-- ELECTRIC BLUE HERO CARD -->
@@ -131,12 +162,6 @@
 
           <div class="progress-ring-wrap" aria-label="Today's completion progress">
             <svg class="progress-ring" viewBox="0 0 128 128">
-              <defs>
-                <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#E3FF3B"></stop>
-                  <stop offset="100%" stop-color="#33A4FA"></stop>
-                </linearGradient>
-              </defs>
               <circle class="progress-ring-track" cx="64" cy="64" r="54"></circle>
               <circle class="progress-ring-fill" id="progressRingFill" cx="64" cy="64" r="54"></circle>
             </svg>
@@ -201,27 +226,49 @@
         </form>
       </section>
 
-      <!-- INTERACTIVE PENXIL BENTO SHORTCUTS -->
+      <!-- INTERACTIVE BENTO SHORTCUTS (4-Card Grid) -->
       <section class="bento-quick-grid">
         <button type="button" class="bento-card bento-lime" data-goto="tasks">
           <div class="bento-top">
-            <span class="bento-tag">Focus Workspace</span>
+            <span class="bento-tag">Workspace</span>
             <span class="bento-arrow" aria-hidden="true">↗</span>
           </div>
           <div>
-            <h2 class="bento-title">Open My Tasks</h2>
-            <p class="bento-desc" id="bentoTasksText">0 tasks waiting in your list</p>
+            <h2 class="bento-title">My Tasks</h2>
+            <p class="bento-desc" id="bentoTasksText">0 pending tasks</p>
+          </div>
+        </button>
+
+        <button type="button" class="bento-card bento-navy" data-goto="calendar">
+          <div class="bento-top">
+            <span class="bento-tag">Schedule</span>
+            <span class="bento-arrow" aria-hidden="true">↗</span>
+          </div>
+          <div>
+            <h2 class="bento-title">Calendar View</h2>
+            <p class="bento-desc" id="bentoCalendarText">Plan upcoming dates visually</p>
+          </div>
+        </button>
+
+        <button type="button" class="bento-card bento-blue" data-goto="focus">
+          <div class="bento-top">
+            <span class="bento-tag">Deep Work</span>
+            <span class="bento-arrow" aria-hidden="true">↗</span>
+          </div>
+          <div>
+            <h2 class="bento-title">Focus Timer</h2>
+            <p class="bento-desc" id="bentoFocusText">0 min focused today</p>
           </div>
         </button>
 
         <button type="button" class="bento-card bento-navy" data-goto="summary">
           <div class="bento-top">
-            <span class="bento-tag">Daily Insights</span>
+            <span class="bento-tag">Analytics</span>
             <span class="bento-arrow" aria-hidden="true">↗</span>
           </div>
           <div>
-            <h2 class="bento-title">Productivity Report</h2>
-            <p class="bento-desc" id="bentoSummaryText">0% daily completion so far</p>
+            <h2 class="bento-title">Daily Summary</h2>
+            <p class="bento-desc" id="bentoSummaryText">0% productivity score</p>
           </div>
         </button>
       </section>
@@ -239,7 +286,6 @@
         <button type="button" class="btn btn-primary" id="tasksQuickModalBtn">+ Add Task</button>
       </div>
 
-      <!-- FILTERS & MANAGEMENT TOOLBAR -->
       <section class="toolbar">
         <div class="filter-pills" id="filterPills" role="tablist" aria-label="Task filters">
           <button type="button" class="filter-pill active" data-filter="all">All Tasks <span class="filter-count" id="count-all">0</span></button>
@@ -264,18 +310,166 @@
         </div>
       </section>
 
-      <!-- DYNAMIC TASK GROUPS -->
       <section class="tasks-container" id="tasksContainer" aria-live="polite"></section>
     </div>
 
     <!-- =====================================
-         SECTION 3: DAILY SUMMARY & ANALYTICS
+         SECTION 3: INTERACTIVE CALENDAR
+         ===================================== -->
+    <div class="app-section" id="section-calendar" data-section="calendar">
+      <div class="section-heading-row">
+        <div>
+          <h2 class="section-title">Task Calendar</h2>
+          <p class="section-subtitle">Click any date to inspect or schedule tasks.</p>
+        </div>
+        <button type="button" class="btn btn-ghost" id="calTodayBtn">Jump to Today</button>
+      </div>
+
+      <div class="calendar-layout">
+        <!-- Monthly Grid Card -->
+        <section class="card calendar-card">
+          <div class="calendar-header">
+            <button type="button" class="btn btn-ghost btn-icon" id="calPrevMonthBtn" aria-label="Previous month">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+            <h3 class="calendar-month-title" id="calMonthLabel">November 2026</h3>
+            <button type="button" class="btn btn-ghost btn-icon" id="calNextMonthBtn" aria-label="Next month">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          </div>
+
+          <div class="calendar-weekdays">
+            <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+          </div>
+
+          <div class="calendar-grid" id="calendarGrid"></div>
+
+          <div class="calendar-legend">
+            <span><i class="legend-dot pending"></i> Pending tasks</span>
+            <span><i class="legend-dot done"></i> All completed</span>
+          </div>
+        </section>
+
+        <!-- Selected Day Agenda Card -->
+        <aside class="card calendar-agenda-card">
+          <div class="calendar-agenda-header">
+            <div>
+              <div class="agenda-kicker">Selected Date</div>
+              <h3 class="agenda-date-title" id="calSelectedDateTitle">Today</h3>
+            </div>
+            <button type="button" class="btn btn-primary" id="calAddForDateBtn">+ Add Here</button>
+          </div>
+
+          <div class="calendar-agenda-list" id="calAgendaList"></div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- =====================================
+         SECTION 4: FOCUS TIMER (POMODORO)
+         ===================================== -->
+    <div class="app-section" id="section-focus" data-section="focus">
+      <div class="section-heading-row">
+        <div>
+          <h2 class="section-title">Focus Timer</h2>
+          <p class="section-subtitle">Distraction-free Pomodoro sessions linked directly to your tasks.</p>
+        </div>
+        <button type="button" class="btn btn-ghost" id="focusSoundToggleBtn" title="Toggle completion chime">
+          <span id="focusSoundLabel">Sound: On</span>
+        </button>
+      </div>
+
+      <div class="focus-layout">
+        <!-- Main Timer Card -->
+        <section class="card focus-timer-card">
+          <div class="focus-mode-pills" id="focusModePills">
+            <button type="button" class="filter-pill active" data-focus-mode="focus" data-minutes="25">Focus • 25m</button>
+            <button type="button" class="filter-pill" data-focus-mode="short" data-minutes="5">Short Break • 5m</button>
+            <button type="button" class="filter-pill" data-focus-mode="long" data-minutes="15">Long Break • 15m</button>
+          </div>
+
+          <div class="focus-ring-wrap">
+            <svg class="focus-ring" viewBox="0 0 220 220">
+              <circle class="focus-ring-track" cx="110" cy="110" r="96"></circle>
+              <circle class="focus-ring-fill" id="focusRingFill" cx="110" cy="110" r="96"></circle>
+            </svg>
+            <div class="focus-ring-center">
+              <span class="focus-mode-badge" id="focusStateLabel">DEEP FOCUS</span>
+              <span class="focus-time-display" id="focusTimeDisplay">25:00</span>
+              <span class="focus-active-task-label" id="focusActiveTaskLabel">No task linked</span>
+            </div>
+          </div>
+
+          <div class="focus-controls">
+            <button type="button" class="btn btn-primary focus-main-btn" id="focusStartPauseBtn">Start Focus</button>
+            <button type="button" class="btn btn-ghost" id="focusResetBtn">Reset</button>
+            <button type="button" class="btn btn-ghost" id="focusPlusFiveBtn">+5 min</button>
+          </div>
+
+          <div class="focus-custom-row">
+            <label for="focusCustomMinutes">Custom duration (min):</label>
+            <input type="number" id="focusCustomMinutes" class="quick-select" min="1" max="180" value="25" style="width: 82px;" />
+            <button type="button" class="btn btn-ghost" id="focusApplyCustomBtn">Set</button>
+          </div>
+        </section>
+
+        <!-- Linked Task & Focus Stats Side Panel -->
+        <aside class="focus-side-stack">
+          <section class="card summary-card">
+            <div class="summary-header">
+              <div class="summary-title">Link a Pending Task</div>
+              <span class="badge badge-category">Optional</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="focusTaskSelect">Working on</label>
+              <select id="focusTaskSelect" class="form-control">
+                <option value="">— Free Focus Session —</option>
+              </select>
+            </div>
+
+            <button type="button" class="btn btn-primary" id="focusCompleteLinkedBtn" style="width: 100%; display: none;">
+              ✓ Mark Linked Task Completed
+            </button>
+          </section>
+
+          <section class="card summary-card">
+            <div class="summary-header">
+              <div class="summary-title">Today's Focus Stats</div>
+              <span class="summary-pill" id="focusTodayMinutesPill">0 min</span>
+            </div>
+
+            <div class="summary-metrics">
+              <div class="summary-mini">
+                <span>Sessions Done</span>
+                <strong id="focusSessionsToday" style="color: var(--lime);">0</strong>
+              </div>
+              <div class="summary-mini">
+                <span>Minutes Focused</span>
+                <strong id="focusMinutesToday" style="color: var(--blue-end);">0</strong>
+              </div>
+            </div>
+
+            <p class="summary-narrative" id="focusTipText">
+              Pick one priority task, hit Start, and stay off notifications for 25 minutes.
+            </p>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <!-- =====================================
+         SECTION 5: DAILY SUMMARY & ANALYTICS
          ===================================== -->
     <div class="app-section" id="section-summary" data-section="summary">
       <div class="section-heading-row">
         <div>
           <h2 class="section-title">Daily Performance Summary</h2>
-          <p class="section-subtitle">End-of-day snapshot and category breakdown.</p>
+          <p class="section-subtitle">End-of-day scorecard, focus time, and category breakdown.</p>
         </div>
       </div>
 
@@ -307,8 +501,8 @@
               <strong id="sumRemaining" style="color: var(--warning);">0</strong>
             </div>
             <div class="summary-mini">
-              <span>High Priority Left</span>
-              <strong id="sumHighLeft" style="color: var(--danger);">0</strong>
+              <span>Focus Time Today</span>
+              <strong id="sumFocusTime" style="color: var(--blue-end);">0 min</strong>
             </div>
           </div>
 
@@ -350,7 +544,7 @@
 
           <div class="form-group">
             <label class="form-label" for="taskTitleInput">Task Title *</label>
-            <input type="text" id="taskTitleInput" class="form-control" placeholder="e.g., Finish quarterly report" required maxlength="140" />
+            <input type="text" id="taskTitleInput" class="form-control" placeholder="e.g., Finish Engineering Maths assignment" required maxlength="140" />
           </div>
 
           <div class="form-group">
@@ -438,6 +632,6 @@
   <!-- TOAST CONTAINER -->
   <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
-  <script src="script.js"></script>
+  <script src="./script.js"></script>
 </body>
 </html>

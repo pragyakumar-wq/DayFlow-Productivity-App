@@ -1,21 +1,18 @@
-# DayFlow — Daily Productivity & To-Do List App
+# DayFlow PWA (Installable Web App)
 
-Is ZIP file me dono versions alag-alag folders me diye gaye hain:
+## What's Inside
+- `index.html` — 5-section layout (Dashboard, Tasks, Calendar, Focus Timer, Summary) + PWA meta tags
+- `style.css` — Electric Blue (`#3A4EFB` -> `#33A4FA`), Neon Lime (`#E3FF3B`), Deep Navy (`#252943`), Lavender-Grey (`#DEE0ED`) theme + hover spotlight/tilt/ripples + mobile bottom dock
+- `script.js` — Tasks CRUD, Monthly Calendar, Pomodoro Focus Timer with audio chime, LocalStorage persistence, and PWA install prompt
+- `manifest.json` — Web App Manifest for standalone mobile/desktop installation
+- `sw.js` — Offline Service Worker
+- `icons/icon-192.png` & `icons/icon-512.png` — Crisp app icons
 
-## 1. HTML / CSS / JS Version (`dayflow-html/`)
-- Bina kisi installation ke seedha `dayflow-html/index.html` ko browser me open karein (ya VS Code Live Server se chalayein).
-- GitHub Pages pe direct deploy karne ke liye `index.html`, `style.css`, aur `script.js` ko repo ke root me push kar dein.
-
-## 2. React JS + Vite Version (`dayflow-react/`)
-Terminal me `dayflow-react` folder ke andar jaake ye commands run karein:
+## Deploy on GitHub Pages
+Extract all files directly into your `DayFlow-Productivity-App` root folder and push:
 
 ```bash
-cd dayflow-react
-npm install
-npm run dev
-```
-
-Production build banane ke liye:
-```bash
-npm run build
+git add index.html style.css script.js manifest.json sw.js icons
+git commit -m "Upgrade DayFlow to Installable PWA with Calendar and Focus Timer"
+git push
 ```
