@@ -892,4 +892,54 @@
   bindEvents();
   renderAll();
   setInterval(updateGreetingAndDate, 60000);
+
+
+
+
+
+  /* ---- Interactive Spotlight, 3D Card Tilt & Click Ripples ---- */
+  function initInteractiveEffects() {
+    const isFinePointer = window.matchMedia('(pointer: fine)').matches;
+
+    // 1. Cursor-tracking spotlight glow on cards & task cards
+    document.addEventListener('pointermove', e => {
+      if (!isFinePointer) return;
+      const target = e.target.closest('.card, .task-card');
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      target.style.setProperty('--mx', `${e.clientX - rect.left}px`);
+      target.style.setProperty('--my', `${e.clientY - rect.top}px`);
+
+      // Subtle 3D tilt only on Hero & Summary cards
+      if (target.classList.contains('greeting-card') || target.classList.contains('summary-card')) {
+        const x = (e.clientX - rect.left) / rect.width - 0.5;
+        const y = (e.clientY - rect.top) / rect.height - 0.5;
+        target.style.transform = `perspective(1000px) rotateX(${(-y * 4).toFixed(2)}deg) rotateY(${(x * 4).toFixed(2)}deg) translateY(-2px)`;
+      }
+    });
+
+    // Reset 3D tilt smoothly when cursor leaves hero/summary cards
+    document.querySelectorAll('.greeting-card, .summary-card').forEach(card => {
+      card.addEventListener('pointerleave', () => {
+        card.style.transform = '';
+      });
+    });
+
+    // 2. Material-style ripple wave on buttons & filter pills
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('.btn, .filter-pill');
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height);
+      const ripple = document.createElement('span');
+      ripple.className = 'ripple-wave';
+      ripple.style.width = ripple.style.height = `${size}px`;
+      ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+      ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+      btn.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 580);
+    });
+  }
+
+  initInteractiveEffects();
 })();
