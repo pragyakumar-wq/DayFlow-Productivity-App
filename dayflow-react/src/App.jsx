@@ -16,6 +16,56 @@ import {
 } from './utils';
 
 export default function App() {
+
+  useEffect(() => {
+    const isFinePointer = window.matchMedia('(pointer: fine)').matches;
+
+    const handlePointerMove = e => {
+      if (!isFinePointer) return;
+      const target = e.target.closest('.card, .task-card');
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      target.style.setProperty('--mx', `${e.clientX - rect.left}px`);
+      target.style.setProperty('--my', `${e.clientY - rect.top}px`);
+
+      if (target.classList.contains('greeting-card') || target.classList.contains('summary-card')) {
+        const x = (e.clientX - rect.left) / rect.width - 0.5;
+        const y = (e.clientY - rect.top) / rect.height - 0.5;
+        target.style.transform = `perspective(1000px) rotateX(${(-y * 4).toFixed(2)}deg) rotateY(${(x * 4).toFixed(2)}deg) translateY(-2px)`;
+      }
+    };
+
+    const handlePointerOut = e => {
+      const card = e.target.closest('.greeting-card, .summary-card');
+      if (card && !card.contains(e.relatedTarget)) {
+        card.style.transform = '';
+      }
+    };
+
+    const handleClick = e => {
+      const btn = e.target.closest('.btn, .filter-pill');
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height);
+      const ripple = document.createElement('span');
+      ripple.className = 'ripple-wave';
+      ripple.style.width = ripple.style.height = `${size}px`;
+      ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+      ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+      btn.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 580);
+    };
+
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerout', handlePointerOut);
+    document.addEventListener('click', handleClick);
+
+    return () => {
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerout', handlePointerOut);
+      document.removeEventListener('click', handleClick);
+    };
+  }, []);
   const [tasks, setTasks] = useState(loadInitialTasks);
   const [theme, setTheme] = useState(() =>
     localStorage.getItem(STORAGE_KEYS.THEME) === 'light' ? 'light' : 'dark'
